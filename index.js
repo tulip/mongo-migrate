@@ -105,10 +105,16 @@ function slugify(str) {
  * @return {String}
  */
 function pad(n) {
-	return Array(5 - n.toString().length).join('0') + n;
+	return Array(14 - n.toString().length).join('0') + n;
 }
 
 function runMongoMigrate(direction, migrationEnd, next) {
+        var migrationRegex = /([0-9]{14})_[a-zA-Z0-9_-]+/;
+
+        var migrationNumFromFile = function(file) {
+        	return parseInt(migrationRegex.exec(file)[1].replace(/_/ig, ''));
+        };
+
 	if (direction) {
 		options.command = direction;
 	}
@@ -130,13 +136,17 @@ function runMongoMigrate(direction, migrationEnd, next) {
 	function migrations(direction, lastMigrationNum, migrateTo) {
 		var isDirectionUp = direction === 'up',
 			hasMigrateTo = !!migrateTo,
-			migrateToNum = hasMigrateTo ? parseInt(migrateTo, 10) : undefined,
+			migrateToNum = hasMigrateTo ? migrationNumFromFile(migrateTo, 10) : undefined,
 			migrateToFound = !hasMigrateTo;
+
+		if (isDirectionUp ? migrateToNum <= lastMigrationNum : migrateToNum >= lastMigrationNum) {
+			return abort("You have already migrated to or beyond the requested migration.  Your last migration was: " + lastMigrationNum);
+		}
 
 		var migrationsToRun = fs.readdirSync('migrations')
 			.filter(function (file) {
-				var formatCorrect = file.match(/^\d+.*\.js$/),
-					migrationNum = formatCorrect && parseInt(file.match(/^\d+/)[0], 10),
+				var formatCorrect = !!migrationRegex.exec(file),
+					migrationNum = formatCorrect && migrationNumFromFile(file),
 					isRunnable = formatCorrect && isDirectionUp ? migrationNum > lastMigrationNum : migrationNum <= lastMigrationNum;
 
 				if (!formatCorrect) {
@@ -145,8 +155,8 @@ function runMongoMigrate(direction, migrationEnd, next) {
 
 				return formatCorrect && isRunnable;
 			}).sort(function (a, b) {
-				var aMigrationNum = parseInt(a.match(/^\d+/)[0], 10),
-						bMigrationNum = parseInt(b.match(/^\d+/)[0], 10);
+				var aMigrationNum = migrationNumFromFile(a),
+						bMigrationNum = migrationNumFromFile(b);
 
 				if (aMigrationNum > bMigrationNum) {
 					return isDirectionUp ? 1 : -1;
@@ -157,8 +167,8 @@ function runMongoMigrate(direction, migrationEnd, next) {
 
 				return 0;
 			}).filter(function(file){
-				var formatCorrect = file.match(/^\d+.*\.js$/),
-					migrationNum = formatCorrect && parseInt(file.match(/^\d+/)[0], 10),
+				var formatCorrect = !!migrationRegex.exec(file),
+					migrationNum = formatCorrect && migrationNumFromFile(file),
 					isRunnable = formatCorrect && isDirectionUp ? migrationNum > lastMigrationNum : migrationNum <= lastMigrationNum;
 
 				if (hasMigrateTo) {
@@ -287,7 +297,7 @@ function runMongoMigrate(direction, migrationEnd, next) {
 				migrations(direction, lastMigrationNum, migrateTo).forEach(function(path){
 					var mod = require(process.cwd() + '/' + path);
 					migrate({
-						num: parseInt(path.split('/')[1].match(/^(\d+)/)[0], 10),
+						num: migrationNumFromFile(path.split('/')[1]),
 						title: path,
 						up: mod.up,
 						down: mod.down});
