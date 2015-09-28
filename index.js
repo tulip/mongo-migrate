@@ -45,6 +45,7 @@ var usage = [
 	, '     down   [name]    migrate down till given migration'
 	, '     up     [name]    migrate up till given migration (the default command)'
 	, '     create [title]   create a new migration file with optional [title]'
+        , '     list             list the migrations in the database'
 	, ''
 ].join('\n');
 
@@ -114,6 +115,31 @@ function runMongoMigrate(direction, migrationEnd, next) {
         var migrationNumFromFile = function(file) {
         	return parseInt(migrationRegex.exec(file)[1].replace(/_/ig, ''));
         };
+
+	// Sorted oldest to newest
+	function getMigrationsInDB(successCallback, errCallback) {
+		var db = require('./lib/db');
+		db.getConnection(dbConfig || require(process.cwd() + path.sep + configFileName)[dbProperty], function (err, db) {
+			if (err) {
+				errCallback('Error connecting to database');
+				return;
+			}
+
+			var migrationCollection = db.migrationCollection;
+			var dbConnection = db.connection;
+
+			migrationCollection.find({}).sort({num: 1}).toArray(function(err, migrations) {
+				if (err) {
+					errCallback('Error querying migration collection');
+					return;
+				} else {
+					successCallback(migrations);
+				}
+			});
+		});
+
+	};
+
 
 	if (direction) {
 		options.command = direction;
@@ -236,7 +262,22 @@ function runMongoMigrate(direction, migrationEnd, next) {
 					title = slugify([].slice.call(arguments).join(' '));
 			title = title ? curr + '-' + title : curr;
 			create(title);
-		}
+		},
+
+		/**
+		 * list
+		 */
+		list: function() {
+			getMigrationsInDB(function(versions) {
+				versions.forEach(function(version) {
+					console.log(version.num);
+				});
+				process.exit(0);
+			}, function(err) {
+				console.log(err);
+				process.exit(0);
+			});
+		},
 	};
 
 	/**
@@ -349,7 +390,6 @@ var runmmIdx = args.indexOf('-runmm'),
 	runMongoMigrateIdx = args.indexOf('--runMongoMigrate');
 if (runmmIdx > -1 || runMongoMigrateIdx > -1) {
 	args.splice(runmmIdx > -1 ? runmmIdx : runMongoMigrateIdx, 1);
-
 	// parse arguments
 	var arg;
 	while (args.length) {
