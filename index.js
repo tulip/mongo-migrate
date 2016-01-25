@@ -119,7 +119,7 @@ function runMongoMigrate(direction, migrationEnd, next) {
 	// Sorted oldest to newest
 	function getMigrationsInDB(successCallback, errCallback) {
 		var db = require('./lib/db');
-		db.getConnection(dbConfig || require(process.cwd() + path.sep + configFileName)[dbProperty], function (err, db) {
+		db.getConnection(dbConfig || require(configFileName)[dbProperty], function (err, db) {
 			if (err) {
 				errCallback('Error connecting to database');
 				return;
@@ -315,7 +315,7 @@ function runMongoMigrate(direction, migrationEnd, next) {
 		}
 
 		var db = require('./lib/db');
-		db.getConnection(dbConfig || require(process.cwd() + path.sep + configFileName)[dbProperty], function (err, db) {
+		db.getConnection(dbConfig || require(configFileName)[dbProperty], function (err, db) {
 			if (err) {
 				return next(new verror.WError(err, 'Error connecting to database'));
 			}
